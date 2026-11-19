@@ -5,6 +5,17 @@ const reviewNames = { removal: 'Removal', replacement: 'Replacement', unresolved
 const number = value => value === null || value === undefined || String(value).trim() === '' || !Number.isFinite(Number(value)) ? null : Number(value);
 const human = value => value ? value.replaceAll('_', ' ').replace(/^./, c => c.toUpperCase()) : 'Unknown';
 const count = value => number(value) === null ? 'Unknown' : number(value).toLocaleString('en');
+const concentrationReasons = {
+  dependent_list_unavailable: 'Dependent list unavailable',
+  dependency_checks_incomplete: 'Dependency checks incomplete',
+  no_matching_dependents_in_sample: 'No matching dependents in sample',
+  dependent_counts_missing: 'Dependent counts unavailable',
+  zero_sampled_package_counts: 'Sampled package counts are zero',
+  only_retired_intermediaries: 'Only retired intermediaries in sample',
+  insufficient_data: 'Insufficient dependency data'
+};
+const registryStatus = row => row.registry_package_status && row.registry_package_status !== 'unknown' ? human(row.registry_package_status) : 'Not reported';
+const displayStatus = row => (!row.project_status || row.project_status === 'unknown') && ['deprecated', 'abandoned'].includes(row.registry_package_status) ? row.registry_package_status : row.project_status || 'unknown';
 
 function intervention(row) {
   if (row.review_status !== 'reviewed') return row.review_status === 'needs_review' ? 'needs_review' : 'unreviewed';
@@ -66,7 +77,7 @@ function startBrowser(report) {
     section.append(list);
     return section;
   };
-  const date = value => value ? value.slice(0, 10) : 'Unknown';
+  const date = value => value ? value.slice(0, 10) : 'Unavailable';
   const option = (select, value, label) => {
     const node = el('option', label);
     node.value = value;
@@ -81,8 +92,10 @@ function startBrowser(report) {
     const identity = el('div');
     identity.append(el('span', row.package, 'package-name'), el('span', `${registryNames[row.registry] || row.registry} · priority ${row.cleanup_priority_rank || 'unknown'} within registry`, 'meta'));
     const status = el('div');
-    status.append(tag(human(row.project_status), row.project_status || 'unknown'));
-    status.append(el('span', row.registry_package_status && row.registry_package_status !== 'unknown' ? `Registry: ${row.registry_package_status}` : human(row.project_status_reason), 'meta'));
+    const statusName = displayStatus(row);
+    status.append(tag(human(statusName), statusName));
+    status.append(el('span', statusName !== row.project_status ? 'Registry status' :
+      registryStatus(row) !== 'Not reported' ? `Registry: ${row.registry_package_status}` : human(row.project_status_reason), 'meta'));
     const parents = el('div');
     [1, 2].forEach(index => {
       if (row[`suggested_direct_dependent_${index}`]) parents.append(el('span', row[`suggested_direct_dependent_${index}`], 'dependent-name'));
@@ -90,8 +103,9 @@ function startBrowser(report) {
     if (!parents.childNodes.length) parents.append(el('span', 'None identified', 'meta'));
     const concentration = el('div');
     const share = number(row.top_two_share_of_sampled_package_counts);
-    concentration.append(el('span', share === null ? 'Unknown' : `${(share * 100).toFixed(share * 100 % 1 ? 1 : 0)}%`, share !== null && share >= .8 ? 'share share-high' : 'share'));
-    concentration.append(el('span', row.dependent_collection_complete === 'true' ? 'List exhausted' : 'Partial / unknown coverage', 'meta'));
+    concentration.append(el('span', share === null ? 'Not scored' : `${(share * 100).toFixed(share * 100 % 1 ? 1 : 0)}%`, share !== null && share >= .8 ? 'share share-high' : 'share'));
+    concentration.append(el('span', share === null ? concentrationReasons[row.concentration_unavailable_reason] || 'Insufficient dependency data' :
+      row.dependent_collection_complete === 'true' ? 'List exhausted' : 'Partial list', 'meta'));
     const review = el('div');
     const action = intervention(row);
     review.append(tag(reviewNames[action], action), el('span', 'Open details', 'meta'));
@@ -103,17 +117,18 @@ function startBrowser(report) {
       const grid = el('div', undefined, 'detail-grid');
       grid.append(detailList('Maintenance evidence', [
         ['Classifier status', human(row.project_status)], ['Classification reason', human(row.project_status_reason)],
-        ['Registry status', human(row.registry_package_status)], ['Classified', date(row.classified_at)],
+        ['Registry status', registryStatus(row)], ['Classified', date(row.classified_at)],
         ['Package synced', date(row.package_synced_at)], ['Repository synced', date(row.repository_synced_at)],
-        ['Commits synced', date(row.commits_synced_at)], ['Issues synced', date(row.issues_synced_at)],
-        ['Release used', date(row.release_date_used_for_classification)],
-        ['Upstream identity', row.upstream_identity_confirmed === 'true' ? 'Confirmed' : row.upstream_identity_confirmed === 'false' ? 'Unconfirmed' : 'Unknown'],
-        ['Signals', row.status_signals], ['Discovery', human(row.discovery_source)], ['Discovered via', row.discovered_via]
+        ...['commits', 'issues'].filter(source => row[`${source}_synced_at`] || row.project_status_reason !== 'archived').map(source => [human(`${source} synced`), date(row[`${source}_synced_at`])]),
+        ['Release used', row.release_date_used_for_classification ? date(row.release_date_used_for_classification) : 'Not used'],
+        ['Upstream identity', row.upstream_identity_confirmed === 'true' ? 'Confirmed' : row.upstream_identity_confirmed === 'false' ? 'Unconfirmed' : 'Not checked'],
+        ['Signals', row.status_signals], ['Discovery', human(row.discovery_source)],
+        ...(row.discovered_via ? [['Discovered via', row.discovered_via]] : [])
       ]));
       const units = row.ranking_count === 'dependent_repos_count' ? 'repositories' : row.ranking_count === 'dependent_packages_count' ? 'packages' : 'unknown units';
       const usage = [
         ['Dependent repositories', count(row.package_dependent_repo_count)], ['Dependent packages', count(row.package_dependent_package_count)],
-        ['Downloads', `${count(row.package_download_count)} (${row.package_download_period || 'period unknown'})`],
+        ['Downloads', number(row.package_download_count) === null ? 'Not reported' : `${count(row.package_download_count)} (${row.package_download_period || 'period not reported'})`],
         ['Top two count sum', `${count(row.top_two_dependent_package_count_sum)} ${units}`],
         ['Dependents sampled', count(row.direct_dependents_sampled)], ['Collection', row.dependent_collection_complete === 'true' ? 'Complete indexed list' : 'Partial or unknown'],
         ['Pagination stopped', human(row.pagination_stop_reason)], ['Kinds checked', row.dependency_kinds],
@@ -124,9 +139,27 @@ function startBrowser(report) {
         if (name) usage.push([name, `${count(row[`suggested_direct_dependent_${index}_package_count`])} dependent packages; ${count(row[`suggested_direct_dependent_${index}_repo_count`])} repositories`]);
       });
       if (row.depends_on_candidates) usage.push(['Candidate dependencies', row.depends_on_candidates]);
-      if (row.related_cleanup_candidates) usage.push(['Related candidates', row.related_cleanup_candidates]);
       grid.append(detailList('Usage and suggested dependents', usage));
       body.append(grid);
+      const related = (row.related_cleanup_candidates || '').split(' ; ').filter(name => rows.some(other => other.registry === row.registry && other.package === name));
+      if (related.length) {
+        const links = el('div', undefined, 'evidence-links');
+        links.append(el('span', 'Related candidates', 'meta'));
+        related.forEach(name => {
+          const link = el('button', name);
+          link.type = 'button';
+          link.addEventListener('click', () => {
+            form.reset();
+            form.elements.registry.value = row.registry;
+            form.elements.query.value = name;
+            page = 0;
+            render();
+            results.scrollIntoView({ block: 'start' });
+          });
+          links.append(link);
+        });
+        body.append(links);
+      }
       const reviewText = action === 'needs_review' ? `Earlier proposal: ${human(row.reviewed_intervention_type)}. Needs review: ${human(row.review_changes)}.` :
         action === 'unreviewed' ? 'No intervention review is recorded.' : `Current review: ${reviewNames[action]}.`;
       body.append(el('p', `${reviewText}${row.review_notes ? `\n${row.review_notes}` : ''}`, 'review-note'));
@@ -171,5 +204,5 @@ function startBrowser(report) {
   render();
 }
 
-if (typeof module !== 'undefined') module.exports = { number, count, intervention, selectRows, orderedRows, safeURL };
+if (typeof module !== 'undefined') module.exports = { number, count, intervention, selectRows, orderedRows, safeURL, startBrowser };
 if (typeof document !== 'undefined') startBrowser(window.CLEANUP_REPORT);
