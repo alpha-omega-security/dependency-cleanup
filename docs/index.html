@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Browse saved dependency cleanup candidates, their maintenance evidence and suggested dependent packages.">
+  <title>Dependency cleanup candidates</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="data.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="masthead">
+    <a href="index.html" class="brand">Dependency cleanup</a>
+    <a class="download" href="candidates.csv" download>Download CSV</a>
+  </header>
+  <main>
+    <section class="intro" aria-labelledby="title">
+      <h1 id="title">Cleanup candidates</h1>
+    </section>
+    <div class="workspace">
+      <form id="filters" class="filters" role="search">
+        <label for="query">Search packages</label>
+        <input id="query" name="query" type="search" placeholder="Package or dependent name" autocomplete="off">
+        <label for="registry">Registry</label>
+        <select id="registry" name="registry"><option value="">All registries</option></select>
+        <label for="status">Maintenance status</label>
+        <select id="status" name="status"><option value="">All statuses</option></select>
+        <label for="intervention">Current review</label>
+        <select id="intervention" name="intervention">
+          <option value="">All review outcomes</option>
+          <option value="removal">Removal</option>
+          <option value="replacement">Replacement</option>
+          <option value="unresolved">Reviewed, unresolved</option>
+          <option value="needs_review">Needs review</option>
+          <option value="unreviewed">Unreviewed</option>
+        </select>
+        <label for="concentration">Sampled concentration</label>
+        <select id="concentration" name="concentration">
+          <option value="">All candidates</option>
+          <option value="high">Top two share at least 80%</option>
+          <option value="lower">Top two share below 80%</option>
+          <option value="unknown">Unknown share</option>
+        </select>
+        <button type="reset" class="reset">Reset filters</button>
+        <details class="filter-note">
+          <summary>About these results</summary>
+          <p>Maintenance labels describe collected evidence. Removal and replacement proposals require a current review; earlier proposals remain visible in the details.</p>
+          <p>Priority is calculated within each registry. Intermediary counts can overlap and include historical releases; they do not predict how many dependency trees a change would clear.</p>
+          <p>This page uses a saved snapshot; opening it does not refresh the evidence. Source dates are shown in each candidate's details.</p>
+        </details>
+      </form>
+      <section class="results" aria-label="Candidate results">
+        <div class="results-toolbar">
+          <p id="result-count" role="status" aria-live="polite"></p>
+          <label for="sort">Order <select id="sort">
+            <option value="priority">Registry, then priority</option>
+            <option value="usage">Dependent repositories</option>
+            <option value="name">Package name</option>
+          </select></label>
+        </div>
+        <div class="column-head" aria-hidden="true"><span>Package / priority</span><span>Maintenance evidence</span><span>Suggested dependents</span><span>Top two share</span><span>Review</span></div>
+        <div id="candidates"></div>
+        <p id="empty" hidden>No candidates match these filters. Try a different package name or reset the filters.</p>
+        <nav class="pagination" aria-label="Results pages">
+          <button id="previous" type="button">Previous</button>
+          <span id="page-count"></span>
+          <button id="next" type="button">Next</button>
+        </nav>
+      </section>
+    </div>
+    <noscript><p>Enable JavaScript to search and filter candidates, or download the CSV above.</p></noscript>
+  </main>
+  <footer>Data from <a href="https://ecosyste.ms/">ecosyste.ms</a> · <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a></footer>
+</body>
+</html>

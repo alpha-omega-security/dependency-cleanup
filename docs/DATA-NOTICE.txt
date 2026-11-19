@@ -1,0 +1,9 @@
+Dependency cleanup candidate snapshot
+
+Source metadata: ecosyste.ms, https://ecosyste.ms/
+Data licence: Creative Commons Attribution-ShareAlike 4.0 International
+https://creativecommons.org/licenses/by-sa/4.0/
+
+This adaptation adds project-status classifications, candidate ordering and
+manual assessments. Source sync dates and evidence links are retained in the
+candidate records. The snapshot is published under the same data licence.
