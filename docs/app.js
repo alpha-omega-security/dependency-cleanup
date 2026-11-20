@@ -2,6 +2,15 @@
 
 const registryNames = { 'rubygems.org': 'RubyGems', 'npmjs.org': 'npm', 'pypi.org': 'PyPI', 'proxy.golang.org': 'Go', 'crates.io': 'crates.io', 'packagist.org': 'Packagist', 'repo1.maven.org': 'Maven' };
 const reviewNames = { removal: 'Removal', replacement: 'Replacement', unresolved: 'Unresolved', needs_review: 'Needs review', unreviewed: 'Unreviewed' };
+const unresolvedReasons = {
+  cleanup_need_unproven: ['Cleanup need unproven', 'The review did not establish that this dependency is obsolete or unnecessary.'],
+  migration_unverified: ['Migration unverified', 'A maintenance concern is established, but a suitable migration has not been verified.'],
+  compatibility_unchecked: ['Compatibility unchecked', 'A possible change is identified, but consumer behavior or supported runtimes still need checking.'],
+  upstream_identity_unclear: ['Upstream identity unclear', 'The package or dependent needs matching to its current upstream before proposing a change.'],
+  no_current_intermediary: ['No current intermediary', 'The saved sample has no current intermediary to change; this does not establish zero usage.'],
+  release_adoption_unconfirmed: ['Release adoption unconfirmed', 'Related cleanup exists in source, but adoption by the selected package releases is unconfirmed.'],
+  not_grouped: ['Not yet grouped', 'The assessment has no recognized unresolved reason.']
+};
 const number = value => value === null || value === undefined || String(value).trim() === '' || !Number.isFinite(Number(value)) ? null : Number(value);
 const human = value => value ? value.replaceAll('_', ' ').replace(/^./, c => c.toUpperCase()) : 'Unknown';
 const count = value => number(value) === null ? 'Unknown' : number(value).toLocaleString('en');
@@ -22,6 +31,11 @@ function intervention(row) {
   return ['removal', 'replacement'].includes(row.reviewed_intervention_type) ? row.reviewed_intervention_type : 'unresolved';
 }
 
+function unresolvedReason(row) {
+  if (intervention(row) !== 'unresolved') return null;
+  return Object.hasOwn(unresolvedReasons, row.review_unresolved_reason) ? row.review_unresolved_reason : 'not_grouped';
+}
+
 function selectRows(rows, filters) {
   const query = (filters.query || '').trim().toLowerCase();
   return rows.filter(row => {
@@ -29,7 +43,8 @@ function selectRows(rows, filters) {
     const text = [row.package, row.registry, row.purl, row.suggested_direct_dependent_1, row.suggested_direct_dependent_2].join(' ').toLowerCase();
     return (!query || text.includes(query)) && (!filters.registry || row.registry === filters.registry) &&
       (!filters.status || (row.project_status || 'unknown') === filters.status) &&
-      (!filters.intervention || intervention(row) === filters.intervention) &&
+      (!filters.intervention || intervention(row) === filters.intervention ||
+        (unresolvedReason(row) !== null && filters.intervention === `unresolved:${unresolvedReason(row)}`)) &&
       (!filters.concentration || (filters.concentration === 'unknown' ? share === null :
         share !== null && (filters.concentration === 'high' ? share >= 0.8 : share < 0.8)));
   });
@@ -82,9 +97,15 @@ function startBrowser(report) {
     const node = el('option', label);
     node.value = value;
     select.append(node);
+    return node;
   };
   registries.forEach(registry => option(form.elements.registry, registry, `${registryNames[registry] || registry} (${rows.filter(r => r.registry === registry).length})`));
   [...new Set(rows.map(row => row.project_status || 'unknown'))].sort().forEach(status => option(form.elements.status, status, human(status)));
+  const group = el('optgroup');
+  group.label = 'Unresolved groups';
+  const reasonOptions = Object.entries(unresolvedReasons).map(([reason, [label]]) =>
+    [reason, option(group, `unresolved:${reason}`, label)]);
+  form.elements.intervention.append(group);
 
   function candidate(row) {
     const item = el('details', undefined, 'candidate');
@@ -108,7 +129,7 @@ function startBrowser(report) {
       row.dependent_collection_complete === 'true' ? 'List exhausted' : 'Partial list', 'meta'));
     const review = el('div');
     const action = intervention(row);
-    review.append(tag(reviewNames[action], action), el('span', 'Open details', 'meta'));
+    review.append(tag(reviewNames[action], action), el('span', action === 'unresolved' ? unresolvedReasons[unresolvedReason(row)][0] : 'Open details', 'meta'));
     summary.append(identity, status, parents, concentration, review);
     item.append(summary);
     item.addEventListener('toggle', () => {
@@ -161,7 +182,8 @@ function startBrowser(report) {
         body.append(links);
       }
       const reviewText = action === 'needs_review' ? `Earlier proposal: ${human(row.reviewed_intervention_type)}. Needs review: ${human(row.review_changes)}.` :
-        action === 'unreviewed' ? 'No intervention review is recorded.' : `Current review: ${reviewNames[action]}.`;
+        action === 'unreviewed' ? 'No intervention review is recorded.' : action === 'unresolved' ?
+          `${unresolvedReasons[unresolvedReason(row)][0]}. ${unresolvedReasons[unresolvedReason(row)][1]}` : `Current review: ${reviewNames[action]}.`;
       body.append(el('p', `${reviewText}${row.review_notes ? `\n${row.review_notes}` : ''}`, 'review-note'));
       const links = el('div', undefined, 'evidence-links');
       const addLink = (label, value) => {
@@ -185,6 +207,10 @@ function startBrowser(report) {
 
   function render() {
     const filters = Object.fromEntries(new FormData(form));
+    const available = selectRows(rows, { ...filters, intervention: '' });
+    reasonOptions.forEach(([reason, node]) => {
+      node.textContent = `${unresolvedReasons[reason][0]} (${available.filter(row => unresolvedReason(row) === reason).length})`;
+    });
     const selected = orderedRows(selectRows(rows, filters), sort.value, registries);
     const pages = Math.max(1, Math.ceil(selected.length / pageSize));
     page = Math.min(page, pages - 1);
@@ -204,5 +230,5 @@ function startBrowser(report) {
   render();
 }
 
-if (typeof module !== 'undefined') module.exports = { number, count, intervention, selectRows, orderedRows, safeURL, startBrowser };
+if (typeof module !== 'undefined') module.exports = { number, count, intervention, unresolvedReason, unresolvedReasons, selectRows, orderedRows, safeURL, startBrowser };
 if (typeof document !== 'undefined') startBrowser(window.CLEANUP_REPORT);

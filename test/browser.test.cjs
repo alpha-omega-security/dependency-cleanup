@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { number, count, intervention, selectRows, orderedRows, safeURL } = require('../docs/app.js');
+const { number, count, intervention, unresolvedReason, unresolvedReasons, selectRows, orderedRows, safeURL } = require('../docs/app.js');
 const { startBrowser } = require('../docs/app.js');
 
 const rows = [
@@ -29,6 +29,21 @@ test('stale proposals are not presented as current removal or replacement recomm
 test('search includes intermediaries and combines with registry and status filters', () => {
   assert.deepEqual(selectRows(rows, { query: 'popular-parent', status: 'active', registry: 'second.org' }), [rows[2]]);
   assert.deepEqual(selectRows(rows, { query: 'popular-parent', registry: 'example.org' }), []);
+});
+
+test('unresolved groups partition current assessments and keep missing reasons explicit', () => {
+  const base = { registry: 'example.org', package: 'helper', review_status: 'reviewed', reviewed_intervention_type: 'unresolved' };
+  const grouped = Object.keys(unresolvedReasons).filter(reason => reason !== 'not_grouped').map(reason => ({ ...base, review_unresolved_reason: reason }));
+  const missing = [base, { ...base, review_unresolved_reason: 'future_reason' }];
+  const stale = { ...grouped[0], review_status: 'needs_review' };
+  const resolved = { ...grouped[0], reviewed_intervention_type: 'replacement' };
+  const unreviewed = { ...grouped[0], review_status: 'unreviewed' };
+  const input = [...grouped, ...missing, stale, resolved, unreviewed];
+  for (const row of grouped) assert.deepEqual(selectRows(input, { intervention: `unresolved:${row.review_unresolved_reason}` }), [row]);
+  for (const row of [stale, resolved, unreviewed]) assert.equal(unresolvedReason(row), null);
+  assert.deepEqual(selectRows(input, { intervention: 'unresolved:not_grouped' }), missing);
+  assert.deepEqual(selectRows(input, { intervention: 'unresolved' }), [...grouped, ...missing]);
+  assert.deepEqual(selectRows(input, { intervention: 'unresolved:compatibility_unchecked', registry: 'other.org' }), []);
 });
 
 test('priority remains within registry and unknown usage sorts after recorded zero', () => {
@@ -62,7 +77,7 @@ test('browser renders registry evidence and explains unscored rows without inven
   try {
     const input = [
       { registry: 'npmjs.org', package: 'inflight', cleanup_priority_rank: '1', project_status: 'unknown', registry_package_status: 'deprecated', project_status_reason: 'insufficient_current_evidence', concentration_unavailable_reason: 'dependency_checks_incomplete', review_status: 'unreviewed' },
-      { registry: 'npmjs.org', package: 'archived', cleanup_priority_rank: '2', project_status: 'dead', project_status_reason: 'archived', registry_package_status: 'unknown', concentration_unavailable_reason: 'only_retired_intermediaries', related_cleanup_candidates: 'inflight' }
+      { registry: 'npmjs.org', package: 'archived', cleanup_priority_rank: '2', project_status: 'dead', project_status_reason: 'archived', registry_package_status: 'unknown', concentration_unavailable_reason: 'only_retired_intermediaries', related_cleanup_candidates: 'inflight', review_status: 'reviewed', reviewed_intervention_type: 'unresolved', review_unresolved_reason: 'migration_unverified' }
     ];
     const before = JSON.stringify(input);
     startBrowser({ rows: input });
@@ -74,11 +89,19 @@ test('browser renders registry evidence and explains unscored rows without inven
     assert.match(deprecated.textContent, /Upstream identity Not checked/);
     assert.match(archived.textContent, /Registry status Not reported/);
     assert.match(archived.textContent, /Only retired intermediaries in sample/);
+    assert.match(archived.textContent, /Unresolved Migration unverified/);
+    assert.match(archived.textContent, /suitable migration has not been verified/);
+    assert.match(elements.filters.elements.intervention.textContent, /Migration unverified \(1\)/);
+    elements.filters.elements.intervention.value = 'unresolved:migration_unverified';
+    elements.filters.listeners.input();
+    assert.equal(elements.candidates.children.length, 1);
+    assert.match(elements.candidates.textContent, /archived/);
     assert.doesNotMatch(archived.textContent, /Commits synced|Issues synced|Discovered via/);
     const button = archived.children[1].children.find(element => element.className === 'evidence-links').children.find(element => element.tag === 'button');
     button.listeners.click();
     assert.equal(elements.candidates.children.length, 1);
     assert.match(elements.candidates.textContent, /inflight/);
+    assert.match(elements.filters.elements.intervention.textContent, /Migration unverified \(0\)/);
     assert.equal(JSON.stringify(input), before);
   } finally {
     delete global.document;
