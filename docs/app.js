@@ -115,7 +115,7 @@ function startBrowser(report) {
     const status = el('div');
     const statusName = displayStatus(row);
     status.append(tag(human(statusName), statusName));
-    status.append(el('span', statusName !== row.project_status ? 'Registry status' :
+    status.append(el('span', row.maintenance_review_needed === 'true' ? 'Maintenance unverified' : statusName !== row.project_status ? 'Registry status' :
       registryStatus(row) !== 'Not reported' ? `Registry: ${row.registry_package_status}` : human(row.project_status_reason), 'meta'));
     const parents = el('div');
     [1, 2].forEach(index => {
@@ -137,6 +137,8 @@ function startBrowser(report) {
       const body = el('div', undefined, 'candidate-body');
       const grid = el('div', undefined, 'detail-grid');
       grid.append(detailList('Maintenance evidence', [
+        ...(row.candidate_decision_reason ? [['Candidate basis', row.candidate_decision_reason]] : []),
+        ...(row.maintenance_review_needed === 'true' ? [['Discovery evidence', 'Requests are recorded, but activity summaries do not establish whether maintainers responded.']] : []),
         ['Classifier status', human(row.project_status)], ['Classification reason', human(row.project_status_reason)],
         ['Registry status', registryStatus(row)], ['Classified', date(row.classified_at)],
         ['Package synced', date(row.package_synced_at)], ['Repository synced', date(row.repository_synced_at)],

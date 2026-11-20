@@ -1,1 +1,1 @@
-docs/candidates.csv text eol=crlf
+docs/*.csv text eol=crlf

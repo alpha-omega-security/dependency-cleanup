@@ -30,3 +30,12 @@ test('static assets resolve under a GitHub Pages project path', () => {
   for (const [, id] of app.matchAll(/getElementById\('([^']+)'\)/g)) assert.ok(ids.includes(id), id);
   assert.ok(fs.existsSync(path.join(docs, '.nojekyll')));
 });
+
+test('published candidates retain a recorded basis and separate lead downloads', () => {
+  assert.ok(report.rows.every(row => row.candidate_decision === 'retain' && row.candidate_decision_reason));
+  const html = fs.readFileSync(path.join(docs, 'index.html'), 'utf8');
+  for (const name of ['investigation-leads', 'rejected-leads']) {
+    assert.ok(html.includes(`href="${name}.csv"`));
+    assert.ok(fs.statSync(path.join(docs, `${name}.csv`)).isFile());
+  }
+});

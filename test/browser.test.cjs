@@ -77,14 +77,19 @@ test('browser renders registry evidence and explains unscored rows without inven
   try {
     const input = [
       { registry: 'npmjs.org', package: 'inflight', cleanup_priority_rank: '1', project_status: 'unknown', registry_package_status: 'deprecated', project_status_reason: 'insufficient_current_evidence', concentration_unavailable_reason: 'dependency_checks_incomplete', review_status: 'unreviewed' },
-      { registry: 'npmjs.org', package: 'archived', cleanup_priority_rank: '2', project_status: 'dead', project_status_reason: 'archived', registry_package_status: 'unknown', concentration_unavailable_reason: 'only_retired_intermediaries', related_cleanup_candidates: 'inflight', review_status: 'reviewed', reviewed_intervention_type: 'unresolved', review_unresolved_reason: 'migration_unverified' }
+      { registry: 'npmjs.org', package: 'archived', cleanup_priority_rank: '2', project_status: 'dead', project_status_reason: 'archived', registry_package_status: 'unknown', concentration_unavailable_reason: 'only_retired_intermediaries', related_cleanup_candidates: 'inflight', review_status: 'reviewed', reviewed_intervention_type: 'unresolved', review_unresolved_reason: 'migration_unverified' },
+      { registry: 'npmjs.org', package: 'maintenance-lead', cleanup_priority_rank: '3', project_status: 'unknown', maintenance_review_needed: 'true', review_status: 'unreviewed', candidate_decision_reason: 'An existing consumer PR proposes replacing this dependency.' }
     ];
     const before = JSON.stringify(input);
     startBrowser({ rows: input });
-    const [deprecated, archived] = elements.candidates.children;
+    const [deprecated, archived, lead] = elements.candidates.children;
     assert.match(deprecated.textContent, /Deprecated Registry status/);
     assert.match(deprecated.textContent, /Not scored Dependency checks incomplete/);
-    for (const element of [deprecated, archived]) { element.open = true; element.listeners.toggle(); }
+    for (const element of [deprecated, archived, lead]) { element.open = true; element.listeners.toggle(); }
+    assert.match(lead.textContent, /Unknown Maintenance unverified/);
+    assert.match(lead.textContent, /activity summaries do not establish whether maintainers responded/);
+    assert.doesNotMatch(lead.textContent, /Dead/);
+    assert.match(lead.textContent, /Candidate basis An existing consumer PR proposes replacing this dependency/);
     assert.match(deprecated.textContent, /Classifier status Unknown/);
     assert.match(deprecated.textContent, /Upstream identity Not checked/);
     assert.match(archived.textContent, /Registry status Not reported/);
