@@ -2,7 +2,7 @@
 
 Browse packages where maintenance work could reduce widespread reliance on potentially obsolete or unmaintained dependencies. Search by package or intermediary, filter by registry and review outcome, and open a candidate for its maintenance evidence and source dates.
 
-The November 2026 snapshot contains 792 candidates across seven registries. Priority is calculated within each registry. Intermediary popularity is a discovery heuristic; overlapping dependency paths and historical releases prevent treating it as predicted removal impact.
+The November 2026 snapshot contains 411 candidates across seven registries. Candidate intake requires checked archival or registry deprecation or abandonment; open requests and zero activity summaries alone do not qualify. Priority is calculated within each registry. Intermediary popularity is a discovery heuristic; overlapping dependency paths and historical releases prevent treating it as predicted removal impact.
 
 This repository contains the static browser and an exported snapshot. Collection, classification and ranking run separately in the cohort research code. The page makes no API requests and needs no build step.
 
